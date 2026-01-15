@@ -28,5 +28,25 @@
             <artifactId>libvirt</artifactId>
             <version>0.5.2</version>
         </dependency>
+
+        <!-- JNA for libvirt -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>5.14.0</version>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.example.kvm.LibvirtTest</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

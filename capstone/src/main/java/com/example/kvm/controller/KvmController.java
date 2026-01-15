@@ -10,7 +10,7 @@ import java.util.List;
 @RequestMapping("/api/vms")
 public class KvmController {
 
-    private final KvmService kvmService;
+    private KvmService kvmService = null;
 
     public KvmController(KvmService kvmService) {
         this.kvmService = kvmService;

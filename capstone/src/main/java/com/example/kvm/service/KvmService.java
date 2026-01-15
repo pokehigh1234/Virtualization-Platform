@@ -1,22 +1,33 @@
 package com.example.kvm.service;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.libvirt.Connect;
 import org.libvirt.Domain;
 import org.libvirt.LibvirtException;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PreDestroy;
-import java.util.ArrayList;
-import java.util.List;
 
 @Service
 public class KvmService {
 
-    private Connect connect;
+    private Connect connect = null;
 
-    public KvmService() throws LibvirtException {
-        // Connect to local KVM hypervisor
-        this.connect = new Connect("qemu:///system", false);
+    public KvmService() {
+        initializeConnection();
+    }
+
+    private void initializeConnection() {
+        try {
+            // Connect to local KVM hypervisor
+            connect = new Connect("qemu:///system", false);
+            System.out.println("Connection successful: " + connect.getURI());
+        } catch (LibvirtException e) {
+            System.err.println("Failed to connect to qemu:///system: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     public List<String> listVMs() throws LibvirtException {

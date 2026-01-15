@@ -1,0 +1,4 @@
+com/example/kvm/service/KvmService.class
+com/example/kvm/LibvirtTest.class
+com/example/kvm/KvmManagerApplication.class
+com/example/kvm/controller/KvmController.class
