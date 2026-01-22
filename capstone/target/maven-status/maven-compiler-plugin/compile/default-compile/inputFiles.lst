@@ -1,4 +1,6 @@
 /home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/KvmManagerApplication.java
-/home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/LibvirtTest.java
-/home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/controller/KvmController.java
+/home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/config/WebSocketConfig.java
+/home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/controller/WebController.java
 /home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/service/KvmService.java
+/home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/websocket/VNCHandshakeInterceptor.java
+/home/fg/Desktop/Virtualization-Platform/capstone/src/main/java/com/example/kvm/websocket/VNCWebSocketHandler.java

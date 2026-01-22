@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>VM Details</title>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1 th:text="'VM: ' + ${vmName}">VM Details</h1>
+        <a href="/" class="back-link">&larr; Back to VM List</a>
+    </div>
+
+    <div class="content">
+        <div class="vnc-section">
+            <h2 style="margin-bottom: 15px;">VNC Console</h2>
+            <div class="status-indicator">
+                <div class="status-dot disconnected" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+            
+            <div class="vnc-viewer-container">
+                <div id="loading" class="loading">
+                    <p>Loading VNC viewer...</p>
+                </div>
+                <canvas id="noVNC_canvas" style="display:none;"></canvas>
+            </div>
+            
+            <div class="connection-controls">
+                <button class="btn-primary" onclick="connectVNC()">Connect to VNC</button>
+                <button class="btn-secondary" onclick="disconnectVNC()">Disconnect</button>
+            </div>
+        </div>
+
+        <div class="details-section">
+            <h2>VM Information</h2>
+            
+            <div class="detail-item">
+                <div class="detail-label">VM Name:</div>
+                <div class="detail-value" th:text="${vmName}">VM Name</div>
+                <br>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-label">VNC Address:</div>
+                <div class="detail-value" th:text="${vncInfo}">localhost:5901</div>
+                <br>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-label">VNC Port:</div>
+                <div class="detail-value" id="vncPortDisplay" th:text="${vncPort}">-</div>
+            </div>
+            
+            <h2 style="margin-top: 30px; margin-bottom: 15px;">VM Controls</h2>
+            
+            <div class="button-group">
+                <form th:action="@{/vm/{name}/start(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
+                    <button type="submit" class="btn-primary" style="width: 100%;">Start VM</button>
+                </form>
+                
+                <form th:action="@{/vm/{name}/shutdown(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
+                    <button type="submit" class="btn-secondary" style="width: 100%;">Shutdown</button>
+                </form>
+
+                <form th:action="@{/vm/{name}/forceshutdown(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
+                    <button type="submit" class="btn-secondary" style="width: 100%;">Force Shutdown</button>
+                </form>
+            </div>
+            
+            <div class="button-group">
+                <form th:action="@{/vm/{name}/delete(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
+                    <button type="submit" class="btn-danger" style="width: 100%;">Delete VM</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Simple VNC WebSocket client
+    let canvas = document.getElementById('noVNC_canvas');
+    let ctx = canvas ? canvas.getContext('2d') : null;
+    let ws = null;
+    const vmName = /*[[${vmName}]]*/ 'default';
+    const cleanVmName = vmName.replace(' (stopped)', '');
+
+    function connectVNC() {
+        try {
+            // Initialize canvas
+            if (canvas) {
+                canvas.width = 800;
+                canvas.height = 600;
+                canvas.style.display = 'block';
+            }
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/vnc/${cleanVmName}?port=5900`;
+            
+            console.log('Connecting to:', wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+            ws.binaryType = 'arraybuffer';
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus(true);
+                showMessage('Connected to VNC');
+            };
+            
+            ws.onmessage = (event) => {
+                // Handle VNC data
+                console.log('Received VNC data:', event.data.byteLength, 'bytes');
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus(false);
+                showMessage('Connection error: Check console', 'error');
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus(false);
+            };
+            
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Failed to connect: ' + error.message, 'error');
+            updateStatus(false);
+        }
+    }
+
+    function disconnectVNC() {
+        if (ws) {
+            ws.close();
+            ws = null;
+        }
+        if (canvas) canvas.style.display = 'none';
+        updateStatus(false);
+    }
+
+    function updateStatus(connected) {
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        
+        if (connected) {
+            dot.className = 'status-dot connected';
+            text.textContent = 'Connected';
+        } else {
+            dot.className = 'status-dot disconnected';
+            text.textContent = 'Disconnected';
+        }
+    }
+
+    function showMessage(msg, type) {
+        const loading = document.getElementById('loading');
+        if (loading) {
+            if (type === 'error') {
+                loading.innerHTML = `<p style="color: #f00;">${msg}</p>`;
+            } else {
+                loading.innerHTML = `<p>${msg}</p>`;
+            }
+            setTimeout(() => {
+                if (loading.parentNode) loading.parentNode.removeChild(loading);
+            }, 3000);
+        }
+    }
+
+    // Expose to global scope
+    window.connectVNC = connectVNC;
+    window.disconnectVNC = disconnectVNC;
+    
+    // Remove loading after page loads
+    window.addEventListener('load', () => {
+        const loading = document.getElementById('loading');
+        if (loading) loading.style.display = 'none';
+    });
+</script>
+</body>
+</html>

@@ -1,4 +1,7 @@
-com/example/kvm/service/KvmService.class
-com/example/kvm/LibvirtTest.class
+com/example/kvm/config/WebSocketConfig.class
+com/example/kvm/controller/WebController.class
+com/example/kvm/websocket/VNCWebSocketHandler.class
 com/example/kvm/KvmManagerApplication.class
-com/example/kvm/controller/KvmController.class
+com/example/kvm/websocket/VNCWebSocketHandler$VNCConnection.class
+com/example/kvm/service/KvmService.class
+com/example/kvm/websocket/VNCHandshakeInterceptor.class
