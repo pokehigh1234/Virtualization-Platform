@@ -7,28 +7,7 @@
 
 <h1>KVM Web Manager</h1>
 
-<h2>Create VM</h2>
-<form action="/vm/create" method="post">
-    <label>VM Name:</label><br>
-    <input type="text" name="name" required><br><br>
-
-    <label>Memory (MB):</label><br>
-    <input type="number" name="memory" value="2048"><br><br>
-
-    <label>CPU(s):</label><br>
-    <input type="number" name="vcpus" value="2"><br><br>
-
-    <label>ISO Path:</label><br>
-    <input type="text" name="iso" placeholder="/var/lib/libvirt/images/ubuntu.iso" required><br><br>
-
-    <label>Disk Size (GB):</label><br>
-    <input type="number" name="diskSize" value="20"><br><br>
-
-    <label>Local Path:</label><br>
-    <input type="text" name="localPath" placeholder="/var/lib/libvirt/vm" required><br><br>
-
-    <button type="submit">Create VM</button>
-</form>
+<h2><a href="/createvm">Create VM</a></h2>
 
 <hr>
 

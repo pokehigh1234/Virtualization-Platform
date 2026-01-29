@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
-    <title>VM Details</title>
+    <title>VM Details - Debug Mode</title>
+    <link rel="stylesheet" type="text/css" th:href="@{/css/vm.css}">
 </head>
 <body>
 <div class="container">
@@ -10,138 +11,61 @@
         <a href="/" class="back-link">&larr; Back to VM List</a>
     </div>
 
-    <div class="content">
-        <div class="vnc-section">
-            <h2 style="margin-bottom: 15px;">VNC Console</h2>
-            <div class="status-indicator">
-                <div class="status-dot disconnected" id="statusDot"></div>
-                <span id="statusText">Disconnected</span>
-            </div>
-            
-            <div class="vnc-viewer-container">
-                <div id="loading" class="loading">
-                    <p>Loading VNC viewer...</p>
-                </div>
-                <canvas id="noVNC_canvas" style="display:none;"></canvas>
-            </div>
-            
-            <div class="connection-controls">
-                <button class="btn-primary" onclick="connectVNC()">Connect to VNC</button>
-                <button class="btn-secondary" onclick="disconnectVNC()">Disconnect</button>
-            </div>
+    <div>
+        <h2>VNC Console</h2>
+        <div class="status-indicator">
+            <div class="status-dot disconnected" id="statusDot"></div>
+            <span id="statusText">Disconnected</span>
         </div>
+        
+        <button class="btn-primary" onclick="connectVNC()">Connect to VNC</button>
+        <button class="btn-secondary" onclick="disconnectVNC()">Disconnect</button>
+        <button class="btn-secondary" onclick="clearDebug()">Clear Debug</button>
+        
+        <h3>Debug Output:</h3>
+        <div class="debug-output" id="debugOutput">Waiting for connection...</div>
+        
+        <h3>VNC Display:</h3>
+        <div id="noVNC_screen"></div>
+    </div>
 
-        <div class="details-section">
-            <h2>VM Information</h2>
-            
-            <div class="detail-item">
-                <div class="detail-label">VM Name:</div>
-                <div class="detail-value" th:text="${vmName}">VM Name</div>
-                <br>
-            </div>
-            
-            <div class="detail-item">
-                <div class="detail-label">VNC Address:</div>
-                <div class="detail-value" th:text="${vncInfo}">localhost:5901</div>
-                <br>
-            </div>
-            
-            <div class="detail-item">
-                <div class="detail-label">VNC Port:</div>
-                <div class="detail-value" id="vncPortDisplay" th:text="${vncPort}">-</div>
-            </div>
-            
-            <h2 style="margin-top: 30px; margin-bottom: 15px;">VM Controls</h2>
-            
-            <div class="button-group">
-                <form th:action="@{/vm/{name}/start(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
-                    <button type="submit" class="btn-primary" style="width: 100%;">Start VM</button>
-                </form>
-                
-                <form th:action="@{/vm/{name}/shutdown(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
-                    <button type="submit" class="btn-secondary" style="width: 100%;">Shutdown</button>
-                </form>
-
-                <form th:action="@{/vm/{name}/forceshutdown(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
-                    <button type="submit" class="btn-secondary" style="width: 100%;">Force Shutdown</button>
-                </form>
-            </div>
-            
-            <div class="button-group">
-                <form th:action="@{/vm/{name}/delete(name=${#strings.trim(#strings.replace(vmName, '(stopped)', ''))})}" method="post" style="flex: 1;">
-                    <button type="submit" class="btn-danger" style="width: 100%;">Delete VM</button>
-                </form>
-            </div>
-        </div>
+    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 4px;">
+        <h3>Debug Information:</h3>
+        <p><strong>VM Name:</strong> <span th:text="${vmName}">-</span></p>
+        <p><strong>VNC Info:</strong> <span th:text="${vncInfo}">-</span></p>
+        <p><strong>VNC Port:</strong> <span th:text="${vncPort}">-</span></p>
     </div>
 </div>
 
-<script>
-    // Simple VNC WebSocket client
-    let canvas = document.getElementById('noVNC_canvas');
-    let ctx = canvas ? canvas.getContext('2d') : null;
-    let ws = null;
-    const vmName = /*[[${vmName}]]*/ 'default';
-    const cleanVmName = vmName.replace(' (stopped)', '');
+<!-- noVNC Library -->
+<script type="module">
+    import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/rfb.js';
+    window.RFB = RFB;
+    console.log('noVNC RFB loaded:', typeof RFB);
+</script>
 
-    function connectVNC() {
-        try {
-            // Initialize canvas
-            if (canvas) {
-                canvas.width = 800;
-                canvas.height = 600;
-                canvas.style.display = 'block';
-            }
-            
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/vnc/${cleanVmName}?port=5900`;
-            
-            console.log('Connecting to:', wsUrl);
-            
-            ws = new WebSocket(wsUrl);
-            ws.binaryType = 'arraybuffer';
-            
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                updateStatus(true);
-                showMessage('Connected to VNC');
-            };
-            
-            ws.onmessage = (event) => {
-                // Handle VNC data
-                console.log('Received VNC data:', event.data.byteLength, 'bytes');
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                updateStatus(false);
-                showMessage('Connection error: Check console', 'error');
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                updateStatus(false);
-            };
-            
-        } catch (error) {
-            console.error('Error:', error);
-            showMessage('Failed to connect: ' + error.message, 'error');
-            updateStatus(false);
-        }
+<script th:inline="javascript">
+    var vmName = /*[[${vmName}]]*/ 'default';
+    var cleanVmName = vmName.replace(' (stopped)', '').trim();
+    var rfb = null;
+    var debugLines = [];
+
+    function addDebug(message) {
+        var timestamp = new Date().toLocaleTimeString();
+        debugLines.push('[' + timestamp + '] ' + message);
+        if (debugLines.length > 100) debugLines.shift();
+        document.getElementById('debugOutput').innerHTML = debugLines.join('<br>');
+        document.getElementById('debugOutput').scrollTop = document.getElementById('debugOutput').scrollHeight;
     }
 
-    function disconnectVNC() {
-        if (ws) {
-            ws.close();
-            ws = null;
-        }
-        if (canvas) canvas.style.display = 'none';
-        updateStatus(false);
+    function clearDebug() {
+        debugLines = [];
+        document.getElementById('debugOutput').innerHTML = 'Debug cleared...';
     }
 
     function updateStatus(connected) {
-        const dot = document.getElementById('statusDot');
-        const text = document.getElementById('statusText');
+        var dot = document.getElementById('statusDot');
+        var text = document.getElementById('statusText');
         
         if (connected) {
             dot.className = 'status-dot connected';
@@ -152,29 +76,107 @@
         }
     }
 
-    function showMessage(msg, type) {
-        const loading = document.getElementById('loading');
-        if (loading) {
-            if (type === 'error') {
-                loading.innerHTML = `<p style="color: #f00;">${msg}</p>`;
-            } else {
-                loading.innerHTML = `<p>${msg}</p>`;
-            }
-            setTimeout(() => {
-                if (loading.parentNode) loading.parentNode.removeChild(loading);
-            }, 3000);
+    function connectVNC() {
+        addDebug('Starting connection process...');
+        addDebug('VM Name: ' + cleanVmName);
+        
+        // Wait for RFB to load
+        if (typeof window.RFB === 'undefined') {
+            addDebug('Waiting for noVNC library to load...');
+            setTimeout(connectVNC, 500);
+            return;
+        }
+        
+        addDebug('noVNC library loaded successfully');
+        
+        try {
+            var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            var wsUrl = protocol + '//' + window.location.host + '/ws/vnc/' + encodeURIComponent(cleanVmName);
+            
+            addDebug('WebSocket URL: ' + wsUrl);
+            addDebug('Creating RFB connection...');
+            
+            // Clear previous display
+            document.getElementById('noVNC_screen').innerHTML = '';
+            
+            // Create noVNC RFB object
+            rfb = new window.RFB(document.getElementById('noVNC_screen'), wsUrl, {
+                shared: true,
+                credentials: {}
+            });
+            
+            addDebug('RFB object created');
+            
+            // Event handlers
+            rfb.addEventListener("connect", function(e) {
+                addDebug('✓ RFB CONNECT event fired');
+                addDebug('Connection details: ' + JSON.stringify(e.detail || {}));
+                updateStatus(true);
+            });
+            
+            rfb.addEventListener("disconnect", function(e) {
+                addDebug('✗ RFB DISCONNECT event fired');
+                addDebug('Clean disconnect: ' + e.detail.clean);
+                addDebug('Reason: ' + (e.detail.reason || 'Unknown'));
+                updateStatus(false);
+            });
+            
+            rfb.addEventListener("credentialsrequired", function() {
+                addDebug('⚠ Credentials required (VM may have VNC password)');
+            });
+            
+            rfb.addEventListener("securityfailure", function(e) {
+                addDebug('✗ Security failure: ' + e.detail.reason);
+                addDebug('Status: ' + e.detail.status);
+                updateStatus(false);
+            });
+            
+            rfb.addEventListener("clipboard", function(e) {
+                addDebug('Clipboard event: ' + e.detail.text.substring(0, 50));
+            });
+            
+            rfb.addEventListener("bell", function() {
+                addDebug('Bell event received');
+            });
+            
+            rfb.addEventListener("desktopname", function(e) {
+                addDebug('Desktop name: ' + e.detail.name);
+            });
+            
+            rfb.addEventListener("capabilities", function(e) {
+                addDebug('Capabilities: ' + JSON.stringify(e.detail));
+            });
+            
+            // Set scaling mode
+            rfb.scaleViewport = true;
+            rfb.resizeSession = false;
+            
+            addDebug('Waiting for VNC server response...');
+            
+        } catch (error) {
+            addDebug('✗ ERROR: ' + error.message);
+            addDebug('Stack: ' + error.stack);
+            updateStatus(false);
         }
     }
 
-    // Expose to global scope
+    function disconnectVNC() {
+        addDebug('Disconnecting...');
+        if (rfb) {
+            rfb.disconnect();
+            rfb = null;
+        }
+        document.getElementById('noVNC_screen').innerHTML = '';
+        updateStatus(false);
+        addDebug('Disconnected');
+    }
+
     window.connectVNC = connectVNC;
     window.disconnectVNC = disconnectVNC;
+    window.clearDebug = clearDebug;
     
-    // Remove loading after page loads
-    window.addEventListener('load', () => {
-        const loading = document.getElementById('loading');
-        if (loading) loading.style.display = 'none';
-    });
+    addDebug('Page loaded. Ready to connect.');
+    addDebug('Clean VM name: ' + cleanVmName);
 </script>
 </body>
 </html>

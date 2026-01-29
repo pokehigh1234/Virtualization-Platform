@@ -2,6 +2,8 @@ package com.example.kvm.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.libvirt.Connect;
 import org.libvirt.Domain;
@@ -85,31 +87,28 @@ public class KvmService {
         // Get the VM's XML configuration
         String xmlDesc = domain.getXMLDesc(0);
         
-        // Parse the XML to find the graphics section and extract the port
-        int portStart = xmlDesc.indexOf("<graphics type='vnc'");
-        if (portStart == -1) {
-            return "No VNC graphics configured for this VM";
+        // Use regex to find the VNC port
+        Pattern pattern = Pattern.compile("<graphics type='vnc'[^>]*port='(\\d+)'");
+        Matcher matcher = pattern.matcher(xmlDesc);
+        
+        if (matcher.find()) {
+            String portStr = matcher.group(1);
+            int port = Integer.parseInt(portStr);
+            
+            // If port is -1, it means auto-assigned
+            if (port == -1) {
+                // For running VMs, try to get from domain ID
+                try {
+                    port = 5900 + domain.getID();
+                } catch (Exception e) {
+                    return "VNC port auto-assigned but VM not running";
+                }
+            }
+            
+            return "localhost:" + port;
         }
         
-        int portAttrStart = xmlDesc.indexOf("port='", portStart);
-        if (portAttrStart == -1) {
-            return "VNC port not found in configuration";
-        }
-        
-        int portValueStart = portAttrStart + 6; // Length of "port='"
-        int portValueEnd = xmlDesc.indexOf("'", portValueStart);
-        String portStr = xmlDesc.substring(portValueStart, portValueEnd);
-        
-        int port = Integer.parseInt(portStr);
-        
-        // VNC ports in libvirt: 5900 + display number
-        // If port is -1, it means auto-assigned; need to check actual port
-        if (port == -1) {
-            // Get the actual port from the domain state
-            port = 5900 + domain.getID();
-        }
-        
-        return "localhost:" + port;
+        return "No VNC graphics configured for this VM";
     }
 
     public void connectToVM(String name) throws LibvirtException {
@@ -202,7 +201,7 @@ public class KvmService {
     }
 
     /*
-     * Creates a qcow2 disk image file using virsh or system command.
+     * Creates a qcow2 disk image file using qemu-img command.
      */
     private void createDiskImage(String diskPath, Integer diskSize) throws LibvirtException {
         try {
@@ -220,23 +219,58 @@ public class KvmService {
             if (exitCode != 0) {
                 throw new Exception("Failed to create disk image: qemu-img exited with code " + exitCode);
             }
-        } catch (Exception e) {
             
-        }
+            // Fix permissions so QEMU can access the disk
+            try {
+                ProcessBuilder chownPb = new ProcessBuilder(
+                    "sudo", "chown", "qemu:kvm", diskPath
+                );
+                Process chownProcess = chownPb.start();
+                chownProcess.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+                chownProcess.getErrorStream().transferTo(System.err);
+                chownProcess.waitFor();
+                System.out.println("Set permissions on disk image: " + diskPath);
+            } catch (Exception e) {
+                System.err.println("Warning: Could not set permissions on disk image: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {}
     }
 
     /*
      * Retrieves the VNC port number for a given VM by its name.
+     * FIXED: Now properly parses the port number from XML using regex.
      */
     public int getVNCPortByName(String vmName) throws Exception {
-        // Query the VM configuration to extract the VNC port
-        // This typically involves parsing libvirt domain XML or querying the VM's display settings
-        String vncInfo = getVNCConnectionInfo(vmName);
+        // Look up the Domain object by its configured name
+        Domain domain = connect.domainLookupByName(vmName);
         
-        // Extract port number from VNC connection info (e.g., "localhost:5900")
-        if (vncInfo != null && vncInfo.contains(":")) {
-            String portStr = vncInfo.split(":")[1];
-            return Integer.parseInt(portStr);
+        // Get the VM's XML configuration
+        String xmlDesc = domain.getXMLDesc(0);
+        
+        // Use regex to extract the VNC port from the graphics tag
+        // Pattern matches: <graphics type='vnc' ... port='5901' ...>
+        Pattern pattern = Pattern.compile("<graphics type='vnc'[^>]*port='(\\d+)'");
+        Matcher matcher = pattern.matcher(xmlDesc);
+        
+        if (matcher.find()) {
+            String portStr = matcher.group(1);
+            int port = Integer.parseInt(portStr);
+            
+            System.out.println("Found VNC port for " + vmName + ": " + port);
+            
+            // If port is -1, it means auto-assigned
+            if (port == -1) {
+                // For running VMs, calculate from domain ID
+                try {
+                    port = 5900 + domain.getID();
+                    System.out.println("Auto-assigned port calculated as: " + port);
+                } catch (Exception e) {
+                    throw new Exception("VNC port auto-assigned but VM not running");
+                }
+            }
+            
+            return port;
         }
         
         throw new Exception("Unable to determine VNC port for VM: " + vmName);

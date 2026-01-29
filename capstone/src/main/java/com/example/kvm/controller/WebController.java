@@ -29,6 +29,11 @@ public class WebController {
         return "index";
     }
 
+    @GetMapping("/createvm")
+    public String createVMForm(Model model) {
+        return "createvm";
+    }
+
     @GetMapping("/vm/{name}")
     public String vmDetails(@PathVariable String name, Model model) throws Exception {
         model.addAttribute("vmName", name);
