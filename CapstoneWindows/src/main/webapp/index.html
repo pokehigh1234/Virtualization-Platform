@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Virtualization Platform</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+    <header class="header">
+        <h1>🖥️ Web Virtualization Platform</h1>
+        <div class="controls">
+            <button id="createVM" class="btn btn-primary">Create VM</button>
+            <button id="refreshVMs" class="btn">Refresh</button>
+            <span id="status" class="status">Disconnected</span>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <h2>Virtual Machines</h2>
+            <div id="vmList" class="vm-list">
+                <p class="empty-state">No virtual machines</p>
+            </div>
+        </aside>
+
+        <main class="content">
+            <div id="vmView" class="vm-view">
+                <div class="welcome">
+                    <h2>Welcome to Web Virtualization Platform</h2>
+                    <p>Create or select a virtual machine to get started</p>
+                </div>
+            </div>
+
+            <div id="terminal" class="terminal">
+                <div class="terminal-header">
+                    <span>Terminal</span>
+                    <button id="clearTerminal" class="btn-small">Clear</button>
+                </div>
+                <div id="terminalOutput" class="terminal-output"></div>
+                <div class="terminal-input-wrapper">
+                    <span class="prompt">$</span>
+                    <input type="text" id="terminalInput" class="terminal-input" placeholder="Enter command...">
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div id="createVMModal" class="modal">
+    <div class="modal-content">
+        <h2>Create Virtual Machine</h2>
+        <form id="createVMForm">
+            <div class="form-group">
+                <label>VM Name:</label>
+                <input type="text" id="vmName" required>
+            </div>
+            <div class="form-group">
+                <label>Memory (MB):</label>
+                <input type="number" id="vmMemory" value="2048" min="512" max="16384">
+            </div>
+            <div class="form-group">
+                <label>CPU Cores:</label>
+                <input type="number" id="vmCPU" value="2" min="1" max="8">
+            </div>
+            <div class="form-group">
+                <label>Disk Size (GB):</label>
+                <input type="number" id="vmDisk" value="20" min="10" max="500">
+            </div>
+
+            <div class="form-section-header">
+                <h3>Storage & Installation</h3>
+            </div>
+
+            <div class="form-group">
+                <label>Storage Location: <span class="label-hint">(optional)</span></label>
+                <div class="input-with-button">
+                    <input type="text" id="vmStorage" placeholder="e.g., C:\VirtualMachines\MyVM">
+                    <button type="button" id="browseStorage" class="btn-small">Browse</button>
+                </div>
+                <small class="form-hint">Leave empty to use default location</small>
+            </div>
+
+            <div class="form-group">
+                <label>ISO File: <span class="label-hint">(optional)</span></label>
+                <div class="input-with-button">
+                    <input type="text" id="vmISO" placeholder="e.g., C:\ISOs\windows.iso">
+                    <button type="button" id="browseISO" class="btn-small">Browse</button>
+                </div>
+                <small class="form-hint">Select an ISO file for OS installation</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" id="cancelCreate" class="btn">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
