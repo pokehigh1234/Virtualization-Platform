@@ -5,12 +5,14 @@ import java.util.stream.Collectors;
 /**
  * Manages all Virtual Machine instances
  * Handles creation, deletion, and lifecycle management
+ * NOW WITH REAL VIRTUALBOX INTEGRATION!
  */
 public class VirtualMachineManager {
 
     private final Map<String, VirtualMachine> virtualMachines;
     private final ScheduledExecutorService scheduler;
     private final List<VMStatusListener> listeners;
+    private final VirtualBoxManager vboxManager;  // ← Command-line integration (NO imports needed!)
 
     public interface VMStatusListener {
         void onStatusChange(VirtualMachine vm);
@@ -20,9 +22,25 @@ public class VirtualMachineManager {
         this.virtualMachines = new ConcurrentHashMap<>();
         this.listeners = new CopyOnWriteArrayList<>();
         this.scheduler = Executors.newScheduledThreadPool(2);
+        this.vboxManager = new VirtualBoxManager();  // ← Uses VBoxManage CLI
 
         // Start monitoring task
         startMonitoring();
+
+        // Print VirtualBox status
+        if (vboxManager.isAvailable()) {
+            System.out.println("✓ VirtualBox enabled - Creating REAL VMs!");
+        } else {
+            System.out.println("⚠ VirtualBox not found - Simulation mode");
+            System.out.println("  Install from: https://www.virtualbox.org/");
+        }
+    }
+
+    /**
+     * Check if VirtualBox is available
+     */
+    public boolean isVirtualBoxAvailable() {
+        return vboxManager.isAvailable();
     }
 
     /**
@@ -55,10 +73,17 @@ public class VirtualMachineManager {
                 storageLocation, isoPath);
         virtualMachines.put(vm.getId(), vm);
 
-        System.out.println("Created VM: " + vm);
+        System.out.println("Creating VM: " + vm);
         if (isoPath != null && !isoPath.isEmpty()) {
             System.out.println("  ISO: " + isoPath);
         }
+
+        // ← ACTUALLY CREATE THE VM IN VIRTUALBOX!
+        boolean created = vboxManager.createVM(vm);
+        if (!created && vboxManager.isAvailable()) {
+            System.err.println("Warning: Failed to create VM in VirtualBox");
+        }
+
         notifyListeners(vm);
 
         return vm;
@@ -92,6 +117,9 @@ public class VirtualMachineManager {
             vm.stop();
         }
 
+        // ← ACTUALLY DELETE FROM VIRTUALBOX!
+        vboxManager.deleteVM(vm);
+
         virtualMachines.remove(id);
         System.out.println("Deleted VM: " + vm.getName());
 
@@ -107,9 +135,15 @@ public class VirtualMachineManager {
             return false;
         }
 
-        vm.start();
-        notifyListeners(vm);
-        return true;
+        // ← ACTUALLY START IN VIRTUALBOX!
+        boolean started = vboxManager.startVM(vm);
+
+        if (started) {
+            vm.start();
+            notifyListeners(vm);
+        }
+
+        return started;
     }
 
     /**
@@ -121,9 +155,15 @@ public class VirtualMachineManager {
             return false;
         }
 
-        vm.stop();
-        notifyListeners(vm);
-        return true;
+        // ← ACTUALLY STOP IN VIRTUALBOX!
+        boolean stopped = vboxManager.stopVM(vm);
+
+        if (stopped) {
+            vm.stop();
+            notifyListeners(vm);
+        }
+
+        return stopped;
     }
 
     /**
@@ -135,9 +175,17 @@ public class VirtualMachineManager {
             return false;
         }
 
-        vm.restart();
-        notifyListeners(vm);
-        return true;
+        // Stop then start
+        stopVM(id);
+
+        // Wait for clean shutdown
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        return startVM(id);
     }
 
     /**
@@ -149,9 +197,15 @@ public class VirtualMachineManager {
             return false;
         }
 
-        vm.pause();
-        notifyListeners(vm);
-        return true;
+        // ← ACTUALLY PAUSE IN VIRTUALBOX!
+        boolean paused = vboxManager.pauseVM(vm);
+
+        if (paused) {
+            vm.pause();
+            notifyListeners(vm);
+        }
+
+        return paused;
     }
 
     /**
