@@ -78,7 +78,7 @@ public class VirtualMachineManager {
             System.out.println("  ISO: " + isoPath);
         }
 
-        // ← ACTUALLY CREATE THE VM IN VIRTUALBOX!
+        // makes the VM in VirtualBox
         boolean created = vboxManager.createVM(vm);
         if (!created && vboxManager.isAvailable()) {
             System.err.println("Warning: Failed to create VM in VirtualBox");

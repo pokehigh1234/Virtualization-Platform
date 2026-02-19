@@ -114,7 +114,9 @@ class VirtualizationClient {
             name: document.getElementById('vmName').value,
             memory: parseInt(document.getElementById('vmMemory').value),
             cpuCores: parseInt(document.getElementById('vmCPU').value),
-            diskSize: parseInt(document.getElementById('vmDisk').value)
+            diskSize: parseInt(document.getElementById('vmDisk').value),
+            storageLocation: document.getElementById('vmStorage').value,
+            isoPath: document.getElementById('vmISO').value
         };
         
         try {
