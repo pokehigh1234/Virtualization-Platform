@@ -8,19 +8,18 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * REST API Servlet for Virtual Machine management
+ * REST API Servlet for VM and Docker Container management
  */
 public class APIServlet extends HttpServlet {
 
     private final VirtualMachineManager vmManager;
+    private final DockerManager dockerManager;
     private final Gson gson;
 
-    public APIServlet(VirtualMachineManager vmManager) {
+    public APIServlet(VirtualMachineManager vmManager, DockerManager dockerManager) {
         this.vmManager = vmManager;
+        this.dockerManager = dockerManager;
         this.gson = new GsonBuilder().setPrettyPrinting().create();
-
-        // Add listener for VM status changes
-        vmManager.addListener(VirtualizationWebSocket::notifyVMStatusChange);
     }
 
     @Override
@@ -32,17 +31,25 @@ public class APIServlet extends HttpServlet {
         resp.setCharacterEncoding("UTF-8");
 
         try {
+            // VM endpoints
             if (pathInfo == null || pathInfo.equals("/vms")) {
-                // Get all VMs
                 handleGetAllVMs(resp);
             } else if (pathInfo.startsWith("/vms/")) {
-                // Get specific VM
                 String vmId = pathInfo.substring(5);
                 handleGetVM(vmId, resp);
             } else if (pathInfo.equals("/stats")) {
-                // Get statistics
                 handleGetStats(resp);
-            } else {
+            }
+            // Docker endpoints
+            else if (pathInfo.equals("/containers")) {
+                handleGetAllContainers(req, resp);
+            } else if (pathInfo.equals("/containers/images")) {
+                handleGetImages(resp);
+            } else if (pathInfo.startsWith("/containers/") && pathInfo.endsWith("/logs")) {
+                String containerId = pathInfo.substring(12, pathInfo.length() - 5);
+                handleGetLogs(containerId, req, resp);
+            }
+            else {
                 sendError(resp, HttpServletResponse.SC_NOT_FOUND, "Endpoint not found");
             }
         } catch (Exception e) {
@@ -59,26 +66,38 @@ public class APIServlet extends HttpServlet {
         resp.setCharacterEncoding("UTF-8");
 
         try {
+            // VM endpoints
             if (pathInfo.equals("/vms")) {
-                // Create new VM
                 handleCreateVM(req, resp);
             } else if (pathInfo.matches("/vms/[^/]+/start")) {
-                // Start VM
                 String vmId = extractVMId(pathInfo);
                 handleVMAction(vmId, "start", resp);
             } else if (pathInfo.matches("/vms/[^/]+/stop")) {
-                // Stop VM
                 String vmId = extractVMId(pathInfo);
                 handleVMAction(vmId, "stop", resp);
             } else if (pathInfo.matches("/vms/[^/]+/restart")) {
-                // Restart VM
                 String vmId = extractVMId(pathInfo);
                 handleVMAction(vmId, "restart", resp);
             } else if (pathInfo.matches("/vms/[^/]+/pause")) {
-                // Pause VM
                 String vmId = extractVMId(pathInfo);
                 handleVMAction(vmId, "pause", resp);
-            } else {
+            }
+            // Docker endpoints
+            else if (pathInfo.equals("/containers")) {
+                handleCreateContainer(req, resp);
+            } else if (pathInfo.matches("/containers/[^/]+/start")) {
+                String containerId = extractContainerId(pathInfo);
+                handleContainerAction(containerId, "start", resp);
+            } else if (pathInfo.matches("/containers/[^/]+/stop")) {
+                String containerId = extractContainerId(pathInfo);
+                handleContainerAction(containerId, "stop", resp);
+            } else if (pathInfo.matches("/containers/[^/]+/restart")) {
+                String containerId = extractContainerId(pathInfo);
+                handleContainerAction(containerId, "restart", resp);
+            } else if (pathInfo.equals("/containers/pull")) {
+                handlePullImage(req, resp);
+            }
+            else {
                 sendError(resp, HttpServletResponse.SC_NOT_FOUND, "Endpoint not found");
             }
         } catch (Exception e) {
@@ -98,6 +117,9 @@ public class APIServlet extends HttpServlet {
             if (pathInfo.startsWith("/vms/")) {
                 String vmId = pathInfo.substring(5);
                 handleDeleteVM(vmId, resp);
+            } else if (pathInfo.startsWith("/containers/")) {
+                String containerId = pathInfo.substring(12);
+                handleDeleteContainer(containerId, resp);
             } else {
                 sendError(resp, HttpServletResponse.SC_NOT_FOUND, "Endpoint not found");
             }
@@ -106,9 +128,8 @@ public class APIServlet extends HttpServlet {
         }
     }
 
-    /**
-     * Handle GET all VMs
-     */
+    // ===== VM Handlers =====
+
     private void handleGetAllVMs(HttpServletResponse resp) throws IOException {
         List<VirtualMachine> vms = vmManager.getAllVMs();
         StringBuilder json = new StringBuilder("[");
@@ -125,9 +146,6 @@ public class APIServlet extends HttpServlet {
         resp.getWriter().write(json.toString());
     }
 
-    /**
-     * Handle GET specific VM
-     */
     private void handleGetVM(String vmId, HttpServletResponse resp) throws IOException {
         VirtualMachine vm = vmManager.getVM(vmId);
 
@@ -140,17 +158,11 @@ public class APIServlet extends HttpServlet {
         resp.getWriter().write(vm.toJSON());
     }
 
-    /**
-     * Handle GET statistics
-     */
     private void handleGetStats(HttpServletResponse resp) throws IOException {
         resp.setStatus(HttpServletResponse.SC_OK);
         resp.getWriter().write(gson.toJson(vmManager.getStatistics()));
     }
 
-    /**
-     * Handle POST create VM
-     */
     private void handleCreateVM(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String body = readRequestBody(req);
         JsonObject json = JsonParser.parseString(body).getAsJsonObject();
@@ -160,7 +172,6 @@ public class APIServlet extends HttpServlet {
         int cpuCores = json.get("cpuCores").getAsInt();
         int diskSize = json.get("diskSize").getAsInt();
 
-        // Optional parameters
         String storageLocation = json.has("storageLocation") && !json.get("storageLocation").isJsonNull()
                 ? json.get("storageLocation").getAsString() : null;
         String isoPath = json.has("isoPath") && !json.get("isoPath").isJsonNull()
@@ -176,9 +187,6 @@ public class APIServlet extends HttpServlet {
         }
     }
 
-    /**
-     * Handle VM actions (start, stop, restart, pause)
-     */
     private void handleVMAction(String vmId, String action, HttpServletResponse resp) throws IOException {
         boolean success = false;
 
@@ -207,9 +215,6 @@ public class APIServlet extends HttpServlet {
         resp.getWriter().write(vm.toJSON());
     }
 
-    /**
-     * Handle DELETE VM
-     */
     private void handleDeleteVM(String vmId, HttpServletResponse resp) throws IOException {
         boolean success = vmManager.deleteVM(vmId);
 
@@ -222,9 +227,122 @@ public class APIServlet extends HttpServlet {
         resp.getWriter().write("{\"success\":true,\"message\":\"VM deleted\"}");
     }
 
-    /**
-     * Send error response
-     */
+    // ===== Docker Handlers =====
+
+    private void handleGetAllContainers(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        boolean all = "true".equals(req.getParameter("all"));
+        List<DockerManager.DockerContainer> containers = dockerManager.listContainers(all);
+
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < containers.size(); i++) {
+            json.append(containers.get(i).toJSON());
+            if (i < containers.size() - 1) {
+                json.append(",");
+            }
+        }
+        json.append("]");
+
+        resp.setStatus(HttpServletResponse.SC_OK);
+        resp.getWriter().write(json.toString());
+    }
+
+    private void handleGetImages(HttpServletResponse resp) throws IOException {
+        List<String> images = dockerManager.listImages();
+        resp.setStatus(HttpServletResponse.SC_OK);
+        resp.getWriter().write(gson.toJson(images));
+    }
+
+    private void handleGetLogs(String containerId, HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        int lines = 100;
+        try {
+            String linesParam = req.getParameter("lines");
+            if (linesParam != null) {
+                lines = Integer.parseInt(linesParam);
+            }
+        } catch (Exception e) {
+            // Use default
+        }
+
+        String logs = dockerManager.getContainerLogs(containerId, lines);
+        JsonObject response = new JsonObject();
+        response.addProperty("logs", logs);
+
+        resp.setStatus(HttpServletResponse.SC_OK);
+        resp.getWriter().write(gson.toJson(response));
+    }
+
+    private void handleCreateContainer(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String body = readRequestBody(req);
+        JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+
+        String name = json.get("name").getAsString();
+        String image = json.get("image").getAsString();
+        String ports = json.has("ports") ? json.get("ports").getAsString() : "";
+        String volumes = json.has("volumes") ? json.get("volumes").getAsString() : "";
+
+        boolean success = dockerManager.createContainer(name, image, ports, volumes);
+
+        if (success) {
+            resp.setStatus(HttpServletResponse.SC_CREATED);
+            resp.getWriter().write("{\"success\":true,\"message\":\"Container created\"}");
+        } else {
+            sendError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Failed to create container");
+        }
+    }
+
+    private void handleContainerAction(String containerId, String action, HttpServletResponse resp) throws IOException {
+        boolean success = false;
+
+        switch (action) {
+            case "start":
+                success = dockerManager.startContainer(containerId);
+                break;
+            case "stop":
+                success = dockerManager.stopContainer(containerId);
+                break;
+            case "restart":
+                success = dockerManager.restartContainer(containerId);
+                break;
+        }
+
+        if (!success) {
+            sendError(resp, HttpServletResponse.SC_NOT_FOUND, "Container not found or action failed");
+            return;
+        }
+
+        resp.setStatus(HttpServletResponse.SC_OK);
+        resp.getWriter().write("{\"success\":true}");
+    }
+
+    private void handleDeleteContainer(String containerId, HttpServletResponse resp) throws IOException {
+        boolean success = dockerManager.removeContainer(containerId, true);
+
+        if (!success) {
+            sendError(resp, HttpServletResponse.SC_NOT_FOUND, "Container not found: " + containerId);
+            return;
+        }
+
+        resp.setStatus(HttpServletResponse.SC_OK);
+        resp.getWriter().write("{\"success\":true,\"message\":\"Container deleted\"}");
+    }
+
+    private void handlePullImage(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String body = readRequestBody(req);
+        JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+
+        String image = json.get("image").getAsString();
+        boolean success = dockerManager.pullImage(image);
+
+        if (success) {
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.getWriter().write("{\"success\":true,\"message\":\"Image pulled\"}");
+        } else {
+            sendError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Failed to pull image");
+        }
+    }
+
+    // ===== Helper Methods =====
+
     private void sendError(HttpServletResponse resp, int status, String message) throws IOException {
         resp.setStatus(status);
         JsonObject error = new JsonObject();
@@ -233,9 +351,6 @@ public class APIServlet extends HttpServlet {
         resp.getWriter().write(gson.toJson(error));
     }
 
-    /**
-     * Read request body
-     */
     private String readRequestBody(HttpServletRequest req) throws IOException {
         StringBuilder sb = new StringBuilder();
         BufferedReader reader = req.getReader();
@@ -246,10 +361,12 @@ public class APIServlet extends HttpServlet {
         return sb.toString();
     }
 
-    /**
-     * Extract VM ID from path
-     */
     private String extractVMId(String pathInfo) {
+        String[] parts = pathInfo.split("/");
+        return parts.length > 2 ? parts[2] : "";
+    }
+
+    private String extractContainerId(String pathInfo) {
         String[] parts = pathInfo.split("/");
         return parts.length > 2 ? parts[2] : "";
     }

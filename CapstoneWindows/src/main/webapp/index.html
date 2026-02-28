@@ -11,43 +11,65 @@
     <header class="header">
         <h1>🖥️ Web Virtualization Platform</h1>
         <div class="controls">
-            <button id="createVM" class="btn btn-primary">Create VM</button>
-            <button id="refreshVMs" class="btn">Refresh</button>
-            <span id="status" class="status">Disconnected</span>
+            <button id="refreshBtn" class="btn">Refresh</button>
         </div>
     </header>
 
-    <div class="main-container">
-        <aside class="sidebar">
-            <h2>Virtual Machines</h2>
-            <div id="vmList" class="vm-list">
-                <p class="empty-state">No virtual machines</p>
-            </div>
-        </aside>
+    <div class="tabs">
+        <button class="tab-button active" data-tab="vms">Virtual Machines</button>
+        <button class="tab-button" data-tab="containers">Docker Containers</button>
+    </div>
 
-        <main class="content">
-            <div id="vmView" class="vm-view">
-                <div class="welcome">
-                    <h2>Welcome to Web Virtualization Platform</h2>
-                    <p>Create or select a virtual machine to get started</p>
+    <!-- Virtual Machines Tab -->
+    <div id="vms-tab" class="tab-content active">
+        <div class="main-container">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Virtual Machines</h2>
+                    <button id="createVM" class="btn btn-primary btn-small">Create VM</button>
                 </div>
-            </div>
+                <div id="vmList" class="vm-list">
+                    <p class="empty-state">No virtual machines</p>
+                </div>
+            </aside>
 
-            <div id="terminal" class="terminal">
-                <div class="terminal-header">
-                    <span>Terminal</span>
-                    <button id="clearTerminal" class="btn-small">Clear</button>
+            <main class="content">
+                <div id="vmView" class="vm-view">
+                    <div class="welcome">
+                        <h2>Welcome to Web Virtualization Platform</h2>
+                        <p>Create or select a virtual machine to get started</p>
+                    </div>
                 </div>
-                <div id="terminalOutput" class="terminal-output"></div>
-                <div class="terminal-input-wrapper">
-                    <span class="prompt">$</span>
-                    <input type="text" id="terminalInput" class="terminal-input" placeholder="Enter command...">
+            </main>
+        </div>
+    </div>
+
+    <!-- Docker Containers Tab -->
+    <div id="containers-tab" class="tab-content">
+        <div class="main-container">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Containers</h2>
+                    <button id="createContainer" class="btn btn-primary btn-small">Create Container</button>
                 </div>
-            </div>
-        </main>
+                <div id="containerList" class="vm-list">
+                    <p class="empty-state">No containers</p>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div id="containerView" class="vm-view">
+                    <div class="welcome">
+                        <h2>Docker Containers</h2>
+                        <p>Create or select a container to get started</p>
+                    </div>
+                </div>
+            </main>
+        </div>
     </div>
 </div>
 
+<!-- Create VM Modal -->
 <div id="createVMModal" class="modal">
     <div class="modal-content">
         <h2>Create Virtual Machine</h2>
@@ -75,25 +97,52 @@
 
             <div class="form-group">
                 <label>Storage Location: <span class="label-hint">(optional)</span></label>
-                <div class="input-with-button">
-                    <input type="text" id="vmStorage" placeholder="e.g., C:\VirtualMachines\MyVM">
-                    <button type="button" id="browseStorage" class="btn-small">Browse</button>
-                </div>
+                <input type="text" id="vmStorage" placeholder="e.g., C:\VirtualMachines\MyVM">
                 <small class="form-hint">Leave empty to use default location</small>
             </div>
 
             <div class="form-group">
                 <label>ISO File: <span class="label-hint">(optional)</span></label>
-                <div class="input-with-button">
-                    <input type="text" id="vmISO" placeholder="e.g., C:\ISOs\windows.iso">
-                    <button type="button" id="browseISO" class="btn-small">Browse</button>
-                </div>
+                <input type="text" id="vmISO" placeholder="e.g., C:\ISOs\windows.iso">
                 <small class="form-hint">Select an ISO file for OS installation</small>
             </div>
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Create</button>
-                <button type="button" id="cancelCreate" class="btn">Cancel</button>
+                <button type="button" class="cancel-btn" class="btn">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Create Container Modal -->
+<div id="createContainerModal" class="modal">
+    <div class="modal-content">
+        <h2>Create Docker Container</h2>
+        <form id="createContainerForm">
+            <div class="form-group">
+                <label>Container Name:</label>
+                <input type="text" id="containerName" required placeholder="my-container">
+            </div>
+            <div class="form-group">
+                <label>Docker Image:</label>
+                <input type="text" id="containerImage" required placeholder="nginx:latest">
+                <small class="form-hint">e.g., nginx, redis, postgres, ubuntu</small>
+            </div>
+            <div class="form-group">
+                <label>Port Mappings: <span class="label-hint">(optional)</span></label>
+                <input type="text" id="containerPorts" placeholder="80:80, 443:443">
+                <small class="form-hint">Format: host:container (comma-separated)</small>
+            </div>
+            <div class="form-group">
+                <label>Volume Mounts: <span class="label-hint">(optional)</span></label>
+                <input type="text" id="containerVolumes" placeholder="/host/path:/container/path">
+                <small class="form-hint">Format: host:container (comma-separated)</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" class="cancel-btn" class="btn">Cancel</button>
             </div>
         </form>
     </div>

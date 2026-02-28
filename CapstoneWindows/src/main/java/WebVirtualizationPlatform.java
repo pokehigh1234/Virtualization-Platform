@@ -1,7 +1,6 @@
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import org.eclipse.jetty.websocket.server.config.JettyWebSocketServletContainerInitializer;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -16,17 +15,19 @@ import java.nio.file.Paths;
 
 /**
  * Main Web Virtualization Platform Server
- * Provides a web-based virtualized Windows environment
+ * Provides web-based VM and Docker container management
  */
 public class WebVirtualizationPlatform {
 
     private static final int DEFAULT_PORT = 8080;
     private Server server;
     private VirtualMachineManager vmManager;
+    private DockerManager dockerManager;
 
     public WebVirtualizationPlatform(int port) {
         this.server = new Server(port);
         this.vmManager = new VirtualMachineManager();
+        this.dockerManager = new DockerManager();
     }
 
     public void start() throws Exception {
@@ -34,18 +35,11 @@ public class WebVirtualizationPlatform {
         context.setContextPath("/");
         server.setHandler(context);
 
-        // Initialize WebSocket with VM Manager BEFORE configuring endpoints
-        VirtualizationWebSocket.setVMManager(vmManager);
-
         // Serve static HTML/CSS/JS files
         context.addServlet(new ServletHolder(new StaticFileServlet()), "/");
-        context.addServlet(new ServletHolder(new APIServlet(vmManager)), "/api/*");
+        context.addServlet(new ServletHolder(new APIServlet(vmManager, dockerManager)), "/api/*");
 
-        // Configure WebSocket
-        JettyWebSocketServletContainerInitializer.configure(context, (servletContext, wsContainer) -> {
-            wsContainer.setMaxTextMessageSize(65535);
-            wsContainer.addMapping("/ws", VirtualizationWebSocket.class);
-        });
+        // Note: WebSocket removed - using simple polling instead
 
         server.start();
         System.out.println("Web Virtualization Platform started on port " + DEFAULT_PORT);
