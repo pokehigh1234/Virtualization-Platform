@@ -2,20 +2,32 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <title>KVM Manager</title>
+    <link rel="stylesheet" type="text/css" th:href="@{/css/index.css}">
 </head>
 <body>
 
-<h1>KVM Web Manager</h1>
+<div class="container">
+    <h1>KVM Web Manager</h1>
 
-<h2><a href="/createvm">Create VM</a></h2>
+    <nav class="top-nav">
+        <a href="/" class="nav-link active">KVM Virtual Machines</a>
+        <a href="/lxc" class="nav-link">LXC Containers</a>
+    </nav>
 
-<hr>
+    <hr>
 
-<h2>VM List</h2>
-<ul>
-    <li th:each="vm : ${vms}">
-        <a th:href="@{/vm/{name}(name=${#strings.trim(#strings.replace(vm, '(stopped)', ''))})}" th:text="${vm}"></a>
-    </li>
-</ul>
+    <div class="actions">
+        <a href="/createvm" class="btn-primary">+ Create VM</a>
+    </div>
+
+    <h2>VM List</h2>
+    <ul class="vm-list">
+        <li th:each="vm : ${vms}" class="vm-item">
+            <a th:href="@{/vm/{name}(name=${#strings.trim(#strings.replace(vm, '(stopped)', ''))})}"
+               th:text="${vm}" class="vm-link"></a>
+        </li>
+    </ul>
+</div>
+
 </body>
 </html>
