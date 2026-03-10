@@ -200,41 +200,154 @@ public class KvmService {
     connect.domainDefineXML(xml);
     }
 
+    /**
+     * External helper for adjusting permissions on an existing qcow2 file and its
+     * parent directories.  This is handy when a user points at an already‑created
+     * image (for example on a USB/NTFS/exfat mount) and libvirt refuses to open it
+     * because the qemu user (uid:107) can't traverse the path.
+     */
+    public void ensureDiskPermissions(String diskPath) {
+        ensureFileAndParentsAccessible(diskPath);
+    }
+
     /*
      * Creates a qcow2 disk image file using qemu-img command.
      */
-    private void createDiskImage(String diskPath, Integer diskSize) throws LibvirtException {
+    private void createDiskImage(String diskPath, Integer diskSize) {
         try {
-            // Use ProcessBuilder for safer command execution
-            ProcessBuilder pb = new ProcessBuilder(
-                "qemu-img", "create", "-f", "qcow2", diskPath, diskSize + "G"
-            );
-            Process process = pb.start();
-            
-            // Drain the output streams to prevent deadlock
-            process.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
-            process.getErrorStream().transferTo(System.err);
-            
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                throw new Exception("Failed to create disk image: qemu-img exited with code " + exitCode);
+            // Ensure the parent directory exists (may be several levels deep)
+            java.io.File diskFile = new java.io.File(diskPath);
+            java.io.File parentDir = diskFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
             }
-            
-            // Fix permissions so QEMU can access the disk
-            try {
-                ProcessBuilder chownPb = new ProcessBuilder(
-                    "sudo", "chown", "qemu:kvm", diskPath
+
+            // If the file doesn't already exist, create it now.  If it does exist
+            // (for example when reusing an existing disk), we still need to adjust
+            // permissions below so that the QEMU process can open it.
+            if (!diskFile.exists()) {
+                ProcessBuilder pb = new ProcessBuilder(
+                    "qemu-img", "create", "-f", "qcow2", diskPath, diskSize + "G"
                 );
-                Process chownProcess = chownPb.start();
-                chownProcess.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
-                chownProcess.getErrorStream().transferTo(System.err);
-                chownProcess.waitFor();
-                System.out.println("Set permissions on disk image: " + diskPath);
-            } catch (Exception e) {
-                System.err.println("Warning: Could not set permissions on disk image: " + e.getMessage());
+                Process process = pb.start();
+                process.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+                process.getErrorStream().transferTo(System.err);
+
+                int exitCode = process.waitFor();
+                if (exitCode != 0) {
+                    throw new Exception("Failed to create disk image: qemu-img exited with code " + exitCode);
+                }
             }
-            
-        } catch (Exception e) {}
+
+            // Adjust permissions on the file and every directory leading to it.
+            ensureFileAndParentsAccessible(diskPath);
+
+        } catch (Exception e) {
+            System.err.println("createDiskImage error: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to create disk image: " + e.getMessage(), e);
+        }
+    }
+
+    /*
+     * Runs a permission-related command (chmod / chown), trying with sudo first
+     * and falling back to a direct call if sudo is unavailable.
+     */
+    private void runPermCommand(String... cmd) {
+        try {
+            // Try with sudo first (covers running as non-root)
+            String[] sudoCmd = new String[cmd.length + 1];
+            sudoCmd[0] = "sudo";
+            System.arraycopy(cmd, 0, sudoCmd, 1, cmd.length);
+            ProcessBuilder pb = new ProcessBuilder(sudoCmd);
+            Process p = pb.start();
+            p.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+            p.getErrorStream().transferTo(System.err);
+            if (p.waitFor() == 0) return;
+        } catch (Exception ignored) {}
+
+        try {
+            // Fallback: direct call (works if already running as root)
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            Process p = pb.start();
+            p.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+            p.getErrorStream().transferTo(System.err);
+            p.waitFor();
+        } catch (Exception e) {
+            System.err.println("Warning: Permission command failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Guarantee that the disk file is readable/writable by the QEMU user and that
+     * every directory in the path is traversable ("o+rx").
+     *
+     * This method is called unconditionally after the image is created so that it
+     * also fixes permissions on pre‑existing files which may have been created by
+     * the user or some other process.  The original implementation only touched
+     * the immediate parent directory which was insufficient when the storage
+     * directory itself was mounted or had more than one level of nesting.
+     */
+    private void ensureFileAndParentsAccessible(String diskPath) {
+        java.io.File diskFile = new java.io.File(diskPath);
+
+        // First make the file world‑read/write and try to chown it to the QEMU user.
+        runPermCommand("chmod", "666", diskPath);
+        System.out.println("Set 666 permissions on disk image: " + diskPath);
+
+        String qemuUser = resolveQemuUser();
+        if (tryChown(qemuUser + ":kvm", diskPath)) {
+            System.out.println("chowned disk image to " + qemuUser + ":kvm");
+        }
+
+        // Walk up the directory hierarchy and ensure each directory is executable.
+        java.io.File dir = diskFile.getParentFile();
+        while (dir != null) {
+            runPermCommand("chmod", "o+rx", dir.getAbsolutePath());
+            System.out.println("Set o+rx on directory: " + dir.getAbsolutePath());
+            dir = dir.getParentFile();
+        }
+    }
+
+    /*
+     * Returns the username QEMU runs as on this system.
+     * Debian/Ubuntu use "libvirt-qemu"; Fedora/Arch/openSUSE use "qemu".
+     */
+    private String resolveQemuUser() {
+        for (String candidate : new String[]{"libvirt-qemu", "qemu"}) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder("id", "-u", candidate);
+                Process p = pb.start();
+                p.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+                p.getErrorStream().transferTo(java.io.OutputStream.nullOutputStream());
+                if (p.waitFor() == 0) {
+                    System.out.println("Detected QEMU user: " + candidate);
+                    return candidate;
+                }
+            } catch (Exception ignored) {}
+        }
+        // Fallback — chmod 666 already covers access
+        System.out.println("Could not detect QEMU user, using 'qemu' as fallback");
+        return "qemu";
+    }
+
+    /*
+     * Attempts to chown a file to the given owner:group.
+     * Returns true if successful.
+     */
+    private boolean tryChown(String ownerGroup, String path) {
+        try {
+            String[] cmd = {"chown", ownerGroup, path};
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            Process p = pb.start();
+            p.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+            p.getErrorStream().transferTo(System.err);
+            boolean ok = p.waitFor() == 0;
+            if (ok) System.out.println("chown " + ownerGroup + " succeeded for: " + path);
+            return ok;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /*

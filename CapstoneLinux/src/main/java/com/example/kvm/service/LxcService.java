@@ -20,12 +20,50 @@ public class LxcService {
     /*
      * Runs a system command and returns its stdout output as a string.
      */
+    /**
+     * Execute a system command and return its stdout output.
+     *
+     * If the binary cannot be found or the process exits non‑zero, the
+     * resulting exception includes both stdout and stderr.  We also try the
+     * same command prefixed with "sudo" when the original invocation fails
+     * with a permissions error; this mimics the behaviour of the disk‑image
+     * helper in KvmService.
+     */
     private String runCommand(String... cmd) throws Exception {
+        StringBuilder output = new StringBuilder();
+        int exitCode = -1;
+
+        try {
+            exitCode = runCommandInternal(output, cmd);
+        } catch (java.io.IOException ioe) {
+            // binary doesn't exist or not in PATH
+            throw new Exception("Executable not found: " + cmd[0], ioe);
+        }
+
+        // if the command failed because of permission and sudo is available,
+        // retry once with sudo.  We look for a couple of common phrases rather
+        // than rely on a specific exit code since different distros behave
+        // differently.
+        if (exitCode != 0 && output.toString().toLowerCase().matches("(?s).*permission denied.*") ) {
+            String[] sudoCmd = new String[cmd.length + 1];
+            sudoCmd[0] = "sudo";
+            System.arraycopy(cmd, 0, sudoCmd, 1, cmd.length);
+            output = new StringBuilder();
+            exitCode = runCommandInternal(output, sudoCmd);
+        }
+
+        if (exitCode != 0) {
+            throw new Exception("Command `" + String.join(" ", cmd) + "` failed (exit "
+                    + exitCode + "):\n" + output);
+        }
+        return output.toString().trim();
+    }
+
+    private int runCommandInternal(StringBuilder output, String[] cmd) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process process = pb.start();
 
-        StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream()))) {
             String line;
@@ -34,11 +72,7 @@ public class LxcService {
             }
         }
 
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new Exception("Command failed (exit " + exitCode + "): " + output);
-        }
-        return output.toString().trim();
+        return process.waitFor();
     }
 
     /*
@@ -119,7 +153,71 @@ public class LxcService {
             cmd.add(release);
         }
 
-        runCommand(cmd.toArray(new String[0]));
+        // the native tools want a default configuration even if it's empty;
+        // older versions simply failed with "failed to open file /home/user/.config/lxc/default.conf"
+        ensureDefaultConfig();
+
+        // ensure LXC binary is available
+        try {
+            runCommand("which", "lxc-create");
+        } catch (Exception e) {
+            throw new Exception("lxc-create not found; please install LXC or run the app on a system with the LXC client tools.");
+        }
+
+        // execute the command, with a fallback when the requested template doesn't exist
+        try {
+            runCommand(cmd.toArray(new String[0]));
+            return;
+        } catch (Exception primaryEx) {
+            String detail = primaryEx.getMessage();
+            if (detail != null && detail.contains("Template \"" + template + "\" not found")) {
+                // attempt to use the download template if we're not already doing so
+                if (!"download".equals(template)) {
+                    List<String> alt = new ArrayList<>();
+                    alt.add("lxc-create");
+                    alt.add("-n");
+                    alt.add(name);
+                    alt.add("-t");
+                    alt.add("download");
+                    if (template != null && !template.isBlank()) {
+                        alt.add("--");
+                        alt.add("--dist");
+                        alt.add(template);
+                        if (release != null && !release.isBlank()) {
+                            alt.add("--release");
+                            alt.add(release);
+                        }
+                    }
+                    try {
+                        runCommand(alt.toArray(new String[0]));
+                        return;
+                    } catch (Exception downloadEx) {
+                        throw new Exception("Template '" + template + "' not found and download fallback also failed:\n"
+                                + detail + "\n--\n" + downloadEx.getMessage());
+                    }
+                }
+            }
+            throw primaryEx;
+        }
+    }
+
+    /**
+     * Create ~/.config/lxc/default.conf if it doesn't already exist.  The
+     * file can be empty; absence causes lxc-create to error out even though the
+     * runtime configuration isn't strictly required for simple containers.
+     */
+    private void ensureDefaultConfig() throws Exception {
+        String home = System.getProperty("user.home");
+        java.io.File cfgDir = new java.io.File(home, ".config/lxc");
+        if (!cfgDir.exists() && !cfgDir.mkdirs()) {
+            throw new Exception("Could not create LXC config directory: " + cfgDir);
+        }
+        java.io.File cfg = new java.io.File(cfgDir, "default.conf");
+        if (!cfg.exists()) {
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(cfg)) {
+                pw.println("# default LXC config created by application");
+            }
+        }
     }
 
     /*

@@ -1,5 +1,7 @@
 package com.example.kvm.controller;
 
+import com.example.kvm.service.KvmService;
+import com.example.kvm.service.LxcService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -7,30 +9,35 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import com.example.kvm.service.KvmService;
-
 @Controller
 public class WebController {
 
-    private KvmService kvmService = null;
+    private final KvmService kvmService;
+    private final LxcService lxcService;
 
-    public WebController(KvmService kvmService) {
+    public WebController(KvmService kvmService, LxcService lxcService) {
         this.kvmService = kvmService;
+        this.lxcService  = lxcService;
     }
 
+    /* ── Index: load both VMs and LXC containers ── */
     @GetMapping("/")
     public String index(Model model) throws Exception {
         model.addAttribute("vms", kvmService.listVMs());
+        try {
+            model.addAttribute("containers", lxcService.listContainers());
+        } catch (Exception e) {
+            model.addAttribute("containers", java.util.Collections.emptyList());
+        }
         return "index";
     }
 
+    /* ── KVM VM routes ── */
     @GetMapping("/createvm")
-    public String createVMForm(Model model) {
-        return "createvm";
-    }
+    public String createVMForm() { return "redirect:/"; }
 
     @GetMapping("/vm/{name}")
-    public String vmDetails(@PathVariable String name, Model model) throws Exception {
+    public String vmDetails(@PathVariable String name, Model model) {
         model.addAttribute("vmName", name);
         return "vm";
     }

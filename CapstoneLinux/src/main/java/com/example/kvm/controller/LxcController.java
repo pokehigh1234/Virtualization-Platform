@@ -33,7 +33,7 @@ public class LxcController {
             model.addAttribute("error", "Failed to list containers: " + e.getMessage());
             model.addAttribute("containers", java.util.Collections.emptyList());
         }
-        return "lxc";
+        return "redirect:/";
     }
 
     /*
@@ -41,7 +41,7 @@ public class LxcController {
      */
     @GetMapping("/create")
     public String createContainerForm() {
-        return "createlxc";
+        return "redirect:/#lxc";
     }
 
     /*
@@ -52,15 +52,16 @@ public class LxcController {
             @RequestParam String name,
             @RequestParam String template,
             @RequestParam(required = false) String release,
-            Model model
+            Model model,
+            org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttrs
     ) {
         try {
             lxcService.createContainer(name, template, release);
         } catch (Exception e) {
-            model.addAttribute("error", "Failed to create container: " + e.getMessage());
-            return "createlxc";
+            redirectAttrs.addFlashAttribute("error", "Failed to create container: " + e.getMessage());
+            return "redirect:/#lxc";
         }
-        return "redirect:/lxc";
+        return "redirect:/#lxc";
     }
 
     /*
@@ -69,7 +70,7 @@ public class LxcController {
     @PostMapping("/{name}/start")
     public String startContainer(@PathVariable String name) throws Exception {
         lxcService.startContainer(name);
-        return "redirect:/lxc";
+        return "redirect:/#lxc";
     }
 
     /*
@@ -78,7 +79,7 @@ public class LxcController {
     @PostMapping("/{name}/stop")
     public String stopContainer(@PathVariable String name) throws Exception {
         lxcService.stopContainer(name);
-        return "redirect:/lxc";
+        return "redirect:/#lxc";
     }
 
     /*
@@ -87,7 +88,7 @@ public class LxcController {
     @PostMapping("/{name}/forcestop")
     public String forceStopContainer(@PathVariable String name) throws Exception {
         lxcService.forceStopContainer(name);
-        return "redirect:/lxc";
+        return "redirect:/#lxc";
     }
 
     /*
@@ -96,6 +97,6 @@ public class LxcController {
     @PostMapping("/{name}/delete")
     public String deleteContainer(@PathVariable String name) throws Exception {
         lxcService.deleteContainer(name);
-        return "redirect:/lxc";
+        return "redirect:/#lxc";
     }
 }

@@ -1,36 +1,66 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="'VM: ' + ${vmName}">VM Details</title>
-    <link rel="stylesheet" type="text/css" th:href="@{/css/vm.css}">
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+    <style>
+        /* Slight override: allow scrolling on the detail page */
+        body { overflow: auto; height: auto; }
+        #app { height: auto; min-height: 100vh; }
+    </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1 th:text="'VM: ' + ${vmName}">VM Details</h1>
-        <a href="/" class="back-link">&larr; Back to VM List</a>
+<div id="app">
+
+    <header class="header">
+        <div class="header-back">
+            <a href="/" class="back-link">← Back to Dashboard</a>
+            <h1 th:text="'VM: ' + ${vmName}">VM Details</h1>
+        </div>
+    </header>
+
+    <div style="padding: 2rem; background: #1e1e1e; flex: 1;">
+        <div class="vm-display">
+            <h2 th:text="${vmName}">Virtual Machine</h2>
+
+            <div class="vm-info">
+                <div class="info-card">
+                    <h3>Name</h3>
+                    <p th:text="${vmName}">-</p>
+                </div>
+                <div class="info-card full-width">
+                    <h3>Hypervisor</h3>
+                    <p class="path-text">qemu:///system (KVM)</p>
+                </div>
+            </div>
+
+            <div class="vm-controls">
+                <form th:action="@{/vm/{n}/start(n=${vmName})}" method="post" style="display:inline">
+                    <button type="submit" class="btn btn-success">Start</button>
+                </form>
+                <form th:action="@{/vm/{n}/shutdown(n=${vmName})}" method="post" style="display:inline">
+                    <button type="submit" class="btn">Stop</button>
+                </form>
+                <form th:action="@{/vm/{n}/forceshutdown(n=${vmName})}" method="post" style="display:inline"
+                      onsubmit="return confirm('Force shutdown VM?')">
+                    <button type="submit" class="btn">Force Shutdown</button>
+                </form>
+                <form th:action="@{/vm/{n}/delete(n=${vmName})}" method="post" style="display:inline"
+                      onsubmit="return confirm('Delete this VM permanently?')">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+
+            <div class="terminal-box" th:with="cleanName=${vmName}">
+                Virtual Machine Display Area<br>
+                VM: <span th:text="${vmName}"></span><br>
+                Managed via libvirt / KVM
+            </div>
+        </div>
     </div>
 
-    <div class="vm-info">
-        <p><strong>Name:</strong> <span th:text="${vmName}">-</span></p>
-    </div>
-
-    <div class="vm-actions">
-        <form th:action="@{/vm/{name}/start(name=${vmName})}" method="post" style="display:inline">
-            <button type="submit" class="btn-success">Start</button>
-        </form>
-        <form th:action="@{/vm/{name}/shutdown(name=${vmName})}" method="post" style="display:inline">
-            <button type="submit" class="btn-warning">Shutdown</button>
-        </form>
-        <form th:action="@{/vm/{name}/forceshutdown(name=${vmName})}" method="post" style="display:inline">
-            <button type="submit" class="btn-danger"
-                    onclick="return confirm('Force shutdown VM?')">Force Shutdown</button>
-        </form>
-        <form th:action="@{/vm/{name}/delete(name=${vmName})}" method="post" style="display:inline">
-            <button type="submit" class="btn-danger"
-                    onclick="return confirm('Delete this VM permanently?')">Delete</button>
-        </form>
-    </div>
 </div>
 </body>
 </html>
