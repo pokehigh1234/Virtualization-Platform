@@ -138,6 +138,10 @@ public class LxcService {
     /*
      * Creates a new LXC container using the specified template (e.g. "ubuntu", "debian").
      * An optional release/version can be passed via extraArgs (e.g. "focal").
+     *
+     * Note: Creating unprivileged containers (as non-root) is much slower because
+     * the download template fetches images from the internet and configures user
+     * namespaces. For production use, the application should be run as root.
      */
     public void createContainer(String name, String template, String release) throws Exception {
         List<String> cmd = new ArrayList<>();
@@ -165,31 +169,33 @@ public class LxcService {
         }
 
         // execute the command, with a fallback when the requested template doesn't exist
+        System.out.println("Creating container " + name + " with template " + template + "...");
         try {
             runCommand(cmd.toArray(new String[0]));
+            System.out.println("Container " + name + " created successfully (local template)");
             return;
         } catch (Exception primaryEx) {
             String detail = primaryEx.getMessage();
             if (detail != null && detail.contains("Template \"" + template + "\" not found")) {
                 // attempt to use the download template if we're not already doing so
                 if (!"download".equals(template)) {
+                    System.out.println("Local template not found, attempting download template (this may take a while)...");
                     List<String> alt = new ArrayList<>();
                     alt.add("lxc-create");
                     alt.add("-n");
                     alt.add(name);
                     alt.add("-t");
                     alt.add("download");
-                    if (template != null && !template.isBlank()) {
-                        alt.add("--");
-                        alt.add("--dist");
-                        alt.add(template);
-                        if (release != null && !release.isBlank()) {
-                            alt.add("--release");
-                            alt.add(release);
-                        }
+                    alt.add("--");
+                    alt.add("--dist");
+                    alt.add(template);
+                    if (release != null && !release.isBlank()) {
+                        alt.add("--release");
+                        alt.add(release);
                     }
                     try {
                         runCommand(alt.toArray(new String[0]));
+                        System.out.println("Container " + name + " created successfully (download template)");
                         return;
                     } catch (Exception downloadEx) {
                         throw new Exception("Template '" + template + "' not found and download fallback also failed:\n"
