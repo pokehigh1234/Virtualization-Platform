@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KVM Web Manager</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+<div id="app">
+
+    <!-- ── Header ── -->
+    <header class="header">
+        <h1>KVM Web Manager</h1>
+        <div class="controls">
+            <button class="btn" onclick="location.reload()">Refresh</button>
+        </div>
+    </header>
+
+    <!-- ── Tabs ── -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="vms">Virtual Machines</button>
+        <button class="tab-button"        data-tab="lxc">LXC Containers</button>
+    </div>
+
+    <!-- ════════════ VMs Tab ════════════ -->
+    <div id="vms-tab" class="tab-content active">
+        <div class="main-container">
+
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Virtual Machines</h2>
+                    <button class="btn btn-primary btn-small"
+                            onclick="openModal('createVMModal')">+ Create VM</button>
+                </div>
+
+                <div class="vm-list">
+                    <p th:if="${#lists.isEmpty(vms)}" class="empty-state">No virtual machines</p>
+
+                    <th:block th:each="vm : ${vms}">
+                        <!-- parse name and status from strings like "ubuntu (stopped)" -->
+                        <a th:with="
+                               isStopped=${vm.contains('(stopped)')},
+                               cleanName=${#strings.trim(#strings.replace(vm, '(stopped)', ''))},
+                               status=${vm.contains('(stopped)') ? 'stopped' : 'running'}"
+                           th:href="@{/vm/{n}(n=${cleanName})}"
+                           class="vm-item">
+                            <div class="vm-name" th:text="${cleanName}"></div>
+                            <div th:class="'vm-status ' + ${status}" th:text="${status}"></div>
+                        </a>
+                    </th:block>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div class="vm-view">
+                    <div class="welcome">
+                        <h2>KVM Virtual Machines</h2>
+                        <p>Create or select a virtual machine from the sidebar to get started</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- ════════════ LXC Tab ════════════ -->
+    <div id="lxc-tab" class="tab-content">
+        <div class="main-container">
+
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Containers</h2>
+                    <button class="btn btn-primary btn-small"
+                            onclick="openModal('createLXCModal')">+ Create</button>
+                </div>
+
+                <!-- Error state -->
+                <div th:if="${error}" class="error-banner" th:text="${error}"></div>
+
+                <div class="vm-list" id="lxcSidebarList">
+                    <p th:if="${#lists.isEmpty(containers)}" class="empty-state">No LXC containers</p>
+
+                    <div th:each="ct : ${containers}"
+                         th:data-name="${ct['name']}"
+                         th:data-state="${ct['state']}"
+                         th:data-ip="${ct['ip']}"
+                         class="vm-item"
+                         onclick="selectContainer(this)">
+                        <div class="vm-name" th:text="${ct['name']}"></div>
+                        <div th:class="'vm-status ' + ${ct['state']}"
+                             th:text="${ct['state']}"></div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div class="vm-view" id="lxcContentPanel">
+                    <div class="welcome">
+                        <h2>LXC Containers</h2>
+                        <p>Create or select a container from the sidebar to get started</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+</div><!-- /#app -->
+
+<!-- ════════════ Create VM Modal ════════════ -->
+<div id="createVMModal" class="modal">
+    <div class="modal-content">
+        <h2>Create Virtual Machine</h2>
+        <form action="/vm/create" method="post">
+
+            <div class="form-group">
+                <label>VM Name:</label>
+                <input type="text" name="name" required placeholder="my-vm">
+            </div>
+            <div class="form-group">
+                <label>Memory (MB):</label>
+                <input type="number" name="memory" value="2048" min="512" max="65536">
+            </div>
+            <div class="form-group">
+                <label>CPU Cores:</label>
+                <input type="number" name="vcpus" value="2" min="1" max="32">
+            </div>
+            <div class="form-group">
+                <label>Disk Size (GB):</label>
+                <input type="number" name="diskSize" value="20" min="1" max="2000">
+            </div>
+
+            <div class="form-section-header"><h3>Storage &amp; Installation</h3></div>
+
+            <div class="form-group">
+                <label>Storage Location: <span class="label-hint">(required)</span></label>
+                <input type="text" name="localPath" placeholder="/var/lib/libvirt/vm" required>
+                <small class="form-hint">Directory where the disk image will be created</small>
+            </div>
+            <div class="form-group">
+                <label>ISO File: <span class="label-hint">(required)</span></label>
+                <input type="text" name="iso" placeholder="/var/lib/libvirt/images/ubuntu.iso" required>
+                <small class="form-hint">Full path to an ISO for OS installation</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" class="cancel-btn" onclick="closeModal('createVMModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ════════════ Create LXC Modal ════════════ -->
+<div id="createLXCModal" class="modal">
+    <div class="modal-content">
+        <h2>Create LXC Container</h2>
+        <form action="/lxc/create" method="post">
+
+            <div class="form-group">
+                <label>Container Name:</label>
+                <input type="text" name="name" required placeholder="my-container">
+            </div>
+            <div class="form-group">
+                <label>Template:</label>
+                <select name="template">
+                    <option value="ubuntu">Ubuntu</option>
+                    <option value="debian">Debian</option>
+                    <option value="alpine">Alpine</option>
+                    <option value="centos">CentOS</option>
+                    <option value="fedora">Fedora</option>
+                    <option value="download">Download (custom)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Release / Version: <span class="label-hint">(optional)</span></label>
+                <input type="text" name="release" placeholder="focal">
+                <small class="form-hint">e.g. focal, bullseye, 3.18</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" class="cancel-btn" onclick="closeModal('createLXCModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    /* ── Tab switching ── */
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(tab + '-tab').classList.add('active');
+        });
+    });
+
+    /* ── Modals ── */
+    function openModal(id)  { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    // Close modal on backdrop click
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', e => {
+            if (e.target === modal) modal.classList.remove('active');
+        });
+    });
+
+    /* ── LXC container detail panel ── */
+    function selectContainer(el) {
+        // Highlight selected item
+        document.querySelectorAll('#lxcSidebarList .vm-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+
+        const name  = el.dataset.name;
+        const state = el.dataset.state;
+        const ip    = el.dataset.ip || '-';
+        const isRunning = state === 'RUNNING';
+
+        document.getElementById('lxcContentPanel').innerHTML = `
+            <div class="vm-display">
+                <h2>${name}</h2>
+                <div class="vm-info">
+                    <div class="info-card">
+                        <h3>State</h3>
+                        <p class="${isRunning ? 'running' : 'stopped'}">${state}</p>
+                    </div>
+                    <div class="info-card">
+                        <h3>IP Address</h3>
+                        <p style="font-size:1rem !important;">${ip}</p>
+                    </div>
+                    <div class="info-card full-width">
+                        <h3>Container Name</h3>
+                        <p class="path-text">${name}</p>
+                    </div>
+                </div>
+
+                <div class="vm-controls">
+                    ${!isRunning ? `
+                        <form action="/lxc/${encodeURIComponent(name)}/start" method="post" style="display:inline">
+                            <button type="submit" class="btn btn-success">Start</button>
+                        </form>` : ''}
+                    ${isRunning ? `
+                        <form action="/lxc/${encodeURIComponent(name)}/stop" method="post" style="display:inline">
+                            <button type="submit" class="btn btn-warning">Stop</button>
+                        </form>
+                        <form action="/lxc/${encodeURIComponent(name)}/forcestop" method="post" style="display:inline"
+                              onsubmit="return confirm('Force stop container?')">
+                            <button type="submit" class="btn btn-warning">Force Stop</button>
+                        </form>` : ''}
+                    <form action="/lxc/${encodeURIComponent(name)}/delete" method="post" style="display:inline"
+                          onsubmit="return confirm('Delete container ${name}? This is irreversible.')">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </div>
+
+                <div class="terminal-box">
+                    LXC Container: ${name}<br>
+                    State: ${state}<br>
+                    ${isRunning ? '● Container Running' : '○ Container Stopped'}
+                </div>
+            </div>
+        `;
+    }
+
+    /* ── Restore LXC tab if redirected back from an action ── */
+    if (window.location.hash === '#lxc') {
+        document.querySelector('[data-tab="lxc"]').click();
+    }
+</script>
+</body>
+</html>

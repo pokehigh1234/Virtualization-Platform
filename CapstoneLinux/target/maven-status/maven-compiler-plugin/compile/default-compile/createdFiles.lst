@@ -1,0 +1,5 @@
+com/example/kvm/controller/WebController.class
+com/example/kvm/controller/LxcController.class
+com/example/kvm/service/LxcService.class
+com/example/kvm/KvmManagerApplication.class
+com/example/kvm/service/KvmService.class

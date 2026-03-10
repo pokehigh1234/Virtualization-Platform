@@ -205,6 +205,10 @@ public class LxcService {
      * Create ~/.config/lxc/default.conf if it doesn't already exist.  The
      * file can be empty; absence causes lxc-create to error out even though the
      * runtime configuration isn't strictly required for simple containers.
+     *
+     * For unprivileged containers, we also add uid/gid mappings if they appear
+     * to be missing.  This allows the app to create containers without running
+     * as root (though KVM operations still require root).
      */
     private void ensureDefaultConfig() throws Exception {
         String home = System.getProperty("user.home");
@@ -216,6 +220,19 @@ public class LxcService {
         if (!cfg.exists()) {
             try (java.io.PrintWriter pw = new java.io.PrintWriter(cfg)) {
                 pw.println("# default LXC config created by application");
+                pw.println("lxc.include = /etc/lxc/default.conf");
+                pw.println("lxc.idmap = u 0 524288 65536");
+                pw.println("lxc.idmap = g 0 524288 65536");
+            }
+        } else {
+            // if the file exists, check if it has the mappings; if not, append them
+            String content = new String(java.nio.file.Files.readAllBytes(cfg.toPath()));
+            if (!content.contains("lxc.idmap")) {
+                try (java.io.PrintWriter pw = new java.io.PrintWriter(
+                        new java.io.FileWriter(cfg, true))) {
+                    pw.println("lxc.idmap = u 0 524288 65536");
+                    pw.println("lxc.idmap = g 0 524288 65536");
+                }
             }
         }
     }

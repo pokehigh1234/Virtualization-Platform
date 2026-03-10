@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>LXC Containers</title>
+    <link rel="stylesheet" type="text/css" th:href="@{/css/lxc.css}">
+</head>
+<body>
+
+<div class="container">
+    <h1>LXC Container Manager</h1>
+
+    <nav class="top-nav">
+        <a href="/" class="nav-link">KVM Virtual Machines</a>
+        <a href="/lxc" class="nav-link active">LXC Containers</a>
+    </nav>
+
+    <hr>
+
+    <!-- Error banner -->
+    <div th:if="${error}" class="error-banner">
+        <strong>Error:</strong> <span th:text="${error}"></span>
+    </div>
+
+    <div class="actions">
+        <a href="/lxc/create" class="btn-primary">+ Create Container</a>
+    </div>
+
+    <h2>Container List</h2>
+
+    <div th:if="${#lists.isEmpty(containers)}" class="empty-state">
+        <p>No LXC containers found on this host.</p>
+    </div>
+
+    <table th:if="${!#lists.isEmpty(containers)}" class="container-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>State</th>
+                <th>IP Address</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="ct : ${containers}">
+                <td th:text="${ct['name']}" class="container-name"></td>
+                <td>
+                    <span th:text="${ct['state']}"
+                          th:classappend="${ct['state'] == 'RUNNING'} ? 'badge-running' : 'badge-stopped'"
+                          class="badge"></span>
+                </td>
+                <td th:text="${ct['ip']}">-</td>
+                <td class="action-buttons">
+                    <!-- Start button (only shown when STOPPED) -->
+                    <form th:if="${ct['state'] != 'RUNNING'}"
+                          th:action="@{/lxc/{name}/start(name=${ct['name']})}" method="post" style="display:inline">
+                        <button type="submit" class="btn-success btn-sm">Start</button>
+                    </form>
+
+                    <!-- Stop button (only shown when RUNNING) -->
+                    <form th:if="${ct['state'] == 'RUNNING'}"
+                          th:action="@{/lxc/{name}/stop(name=${ct['name']})}" method="post" style="display:inline">
+                        <button type="submit" class="btn-warning btn-sm">Stop</button>
+                    </form>
+
+                    <!-- Force stop (only shown when RUNNING) -->
+                    <form th:if="${ct['state'] == 'RUNNING'}"
+                          th:action="@{/lxc/{name}/forcestop(name=${ct['name']})}" method="post" style="display:inline">
+                        <button type="submit" class="btn-danger btn-sm"
+                                onclick="return confirm('Force stop container?')">Force Stop</button>
+                    </form>
+
+                    <!-- Delete button -->
+                    <form th:action="@{/lxc/{name}/delete(name=${ct['name']})}" method="post" style="display:inline">
+                        <button type="submit" class="btn-danger btn-sm"
+                                th:onclick="'return confirm(\'Delete container ' + ${ct['name']} + '? This is irreversible.\')'">
+                            Delete
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>
