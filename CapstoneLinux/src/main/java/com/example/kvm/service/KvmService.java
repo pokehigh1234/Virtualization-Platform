@@ -42,6 +42,16 @@ public class KvmService {
             // Log error if connection fails
             System.err.println("Failed to connect to qemu:///system: " + e.getMessage());
             e.printStackTrace();
+            connect = null;
+        }
+    }
+
+    /*
+     * Checks if the connection to the hypervisor is available.
+     */
+    private void checkConnection() {
+        if (connect == null) {
+            throw new RuntimeException("No connection to KVM hypervisor. Ensure libvirtd is running and accessible.");
         }
     }
 
@@ -49,6 +59,7 @@ public class KvmService {
      * Retrieves all virtual machines available on the hypervisor.
      */
     public List<String> listVMs() throws LibvirtException {
+        checkConnection();
         List<String> vms = new ArrayList<>();
 
         // Iterate through all currently running VMs and add them to the list
@@ -72,6 +83,7 @@ public class KvmService {
      * Starts a stopped virtual machine.
      */
     public void startVM(String name) throws LibvirtException {
+        checkConnection();
         // Look up the Domain object by its configured name
         Domain domain = connect.domainLookupByName(name);
         // Trigger the VM to start
@@ -82,6 +94,7 @@ public class KvmService {
      * Retrieves VNC connection information for a virtual machine.
      */
     public String getVNCConnectionInfo(String name) throws LibvirtException {
+        checkConnection();
         // Look up the Domain object by its configured name
         Domain domain = connect.domainLookupByName(name);
         // Get the VM's XML configuration
@@ -112,6 +125,7 @@ public class KvmService {
     }
 
     public void connectToVM(String name) throws LibvirtException {
+        checkConnection();
         // This method is kept for backward compatibility
         // The actual connection info retrieval is in getVNCConnectionInfo()
         getVNCConnectionInfo(name);
@@ -121,6 +135,7 @@ public class KvmService {
      * Gracefully shuts down a running virtual machine.
      */
     public void stopVM(String name) throws LibvirtException {
+        checkConnection();
         // Look up the Domain object by its configured name
         Domain domain = connect.domainLookupByName(name);
         // Send graceful shutdown signal to the VM's operating system
@@ -131,6 +146,7 @@ public class KvmService {
      * Forcefully terminates a virtual machine immediately.
      */
     public void forceStopVM(String name) throws LibvirtException {
+        checkConnection();
         // Look up the Domain object by its configured name
         Domain domain = connect.domainLookupByName(name);
         // Immediately terminate the VM (equivalent to pulling the power cord)
@@ -152,6 +168,7 @@ public class KvmService {
      * Deletes a virtual machine from the hypervisor.
      */
     public void deleteVM(String name) throws LibvirtException {
+        checkConnection();
         // Look up the Domain object by its configured name
         Domain domain = connect.domainLookupByName(name);
         // Undefine (delete) the VM from the hypervisor
@@ -163,6 +180,18 @@ public class KvmService {
      */
     public void createVMFromISO(String name, int memoryMB, int vcpus, String isoPath, Integer diskSize, String localPath)
         throws LibvirtException {
+        checkConnection();
+
+        // Validate that the ISO file exists and is accessible
+        java.io.File isoFile = new java.io.File(isoPath);
+        if (!isoFile.exists()) {
+            throw new RuntimeException("ISO file not found: " + isoPath);
+        }
+        if (!isoFile.canRead()) {
+            throw new RuntimeException("Cannot read ISO file (permission denied): " + isoPath);
+        }
+        
+        System.out.println("Using ISO: " + isoPath);
 
     // Create the disk image file at the specified location
     String diskPath = localPath + "/" + name + ".qcow2";

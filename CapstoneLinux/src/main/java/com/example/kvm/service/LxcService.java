@@ -33,8 +33,26 @@ public class LxcService {
         StringBuilder output = new StringBuilder();
         int exitCode = -1;
 
+        // for LXC commands, always try with sudo first since they require root privileges
+        boolean isLxcCommand = cmd.length > 0 && cmd[0].startsWith("lxc-");
+
+        if (isLxcCommand) {
+            String[] sudoCmd = new String[cmd.length + 1];
+            sudoCmd[0] = "sudo";
+            System.arraycopy(cmd, 0, sudoCmd, 1, cmd.length);
+            try {
+                exitCode = runCommandInternal(output, sudoCmd);
+                if (exitCode == 0) {
+                    return output.toString().trim();
+                }
+            } catch (Exception ignored) {
+                // sudo failed, fall back to direct command
+            }
+        }
+
+        // try the original command
         try {
-            exitCode = runCommandInternal(output, cmd);
+            exitCode = runCommandInternal(new StringBuilder(), cmd);
         } catch (java.io.IOException ioe) {
             // binary doesn't exist or not in PATH
             throw new Exception("Executable not found: " + cmd[0], ioe);
@@ -111,7 +129,16 @@ public class LxcService {
      * Starts a stopped LXC container.
      */
     public void startContainer(String name) throws Exception {
-        runCommand("lxc-start", "-n", name);
+        // ensure the default network bridge exists before starting
+        ensureNetworkBridge();
+        // start in daemon mode (-d) to avoid hanging on console login
+        runCommand("lxc-start", "-n", name, "-d");
+        // verify it actually started
+        Thread.sleep(2000); // give it a moment
+        String info = runCommand("lxc-info", "-n", name);
+        if (!info.contains("RUNNING")) {
+            throw new Exception("Container failed to start. Info:\n" + info);
+        }
     }
 
     /*
@@ -150,6 +177,8 @@ public class LxcService {
         cmd.add(name);
         cmd.add("-t");
         cmd.add(template);
+        // note: -a/--arch is not supported by lxc-create itself; architecture is
+        // specified via template options (e.g. --arch for download template)
 
         if (release != null && !release.isBlank()) {
             cmd.add("--");
@@ -189,6 +218,9 @@ public class LxcService {
                     alt.add("--");
                     alt.add("--dist");
                     alt.add(template);
+                    // request amd64 images explicitly when downloading
+                    alt.add("--arch");
+                    alt.add("amd64");
                     if (release != null && !release.isBlank()) {
                         alt.add("--release");
                         alt.add(release);
@@ -240,6 +272,26 @@ public class LxcService {
                     pw.println("lxc.idmap = g 0 524288 65536");
                 }
             }
+        }
+    }
+
+    /**
+     * Ensure the default LXC network bridge (lxcbr0) exists and is configured.
+     * This is required for containers that use veth networking with a bridge.
+     */
+    private void ensureNetworkBridge() throws Exception {
+        try {
+            // check if the bridge already exists
+            runCommand("ip", "link", "show", "lxcbr0");
+            System.out.println("Network bridge lxcbr0 already exists");
+            return;
+        } catch (Exception e) {
+            // bridge doesn't exist, create it
+            System.out.println("Creating network bridge lxcbr0...");
+            runCommand("ip", "link", "add", "name", "lxcbr0", "type", "bridge");
+            runCommand("ip", "link", "set", "lxcbr0", "up");
+            runCommand("ip", "addr", "add", "10.0.3.1/24", "dev", "lxcbr0");
+            System.out.println("Network bridge lxcbr0 created and configured");
         }
     }
 
